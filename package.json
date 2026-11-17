@@ -1,0 +1,29 @@
+{
+  "name": "entos-be",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Entos backend — Myanmar café discovery API (Turborepo + Express + Prisma)",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate --filter=@entos/database",
+    "db:migrate": "turbo run db:migrate --filter=@entos/database",
+    "db:migrate:deploy": "turbo run db:migrate:deploy --filter=@entos/database",
+    "db:studio": "pnpm --filter @entos/database db:studio",
+    "db:seed": "pnpm --filter @entos/database db:seed",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  }
+}

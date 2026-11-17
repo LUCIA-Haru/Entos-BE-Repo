@@ -1,0 +1,15 @@
+{
+  "name": "@entos/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared TypeScript and ESLint configs for Entos packages",
+  "exports": {
+    "./typescript/base.json": "./typescript/base.json",
+    "./typescript/node.json": "./typescript/node.json",
+    "./eslint/base.mjs": "./eslint/base.mjs"
+  },
+  "files": [
+    "typescript",
+    "eslint"
+  ]
+}

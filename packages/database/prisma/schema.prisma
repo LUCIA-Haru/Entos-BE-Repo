@@ -1,0 +1,263 @@
+// Entos V1 Prisma schema
+//
+// Teaching notes:
+// - Models map to PostgreSQL tables. Relations are foreign keys.
+// - better-auth tables (User, Session, Account, Verification) follow the
+//   library's expected shape so we can wire login later without reshuffling.
+// - Domain tables (Cafe, MenuItem, …) mirror the learning-plan entities.
+//
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth (better-auth compatible core tables)
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+  reviews     Review[]
+  collections Collection[]
+  visitLogs   VisitLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verifications")
+}
+
+// ---------------------------------------------------------------------------
+// Domain — cafés & discovery
+// ---------------------------------------------------------------------------
+
+enum CafeStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Cafe {
+  id               String     @id @default(cuid())
+  name             String
+  slug             String     @unique
+  description      String?
+  shortDescription String?
+  status           CafeStatus @default(DRAFT)
+
+  // Location (Myanmar-friendly labels; lat/lng optional for later maps)
+  address   String?
+  city      String
+  township  String?
+  country   String    @default("MM")
+  latitude  Float?
+  longitude Float?
+  timezone  String    @default("Asia/Yangon")
+
+  coverImageUrl String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  menuItems       MenuItem[]
+  hours           CafeHours[]
+  tags            CafeTag[]
+  reviews         Review[]
+  collectionCafes CollectionCafe[]
+  visitLogs       VisitLog[]
+
+  @@index([city])
+  @@index([status])
+  @@index([township])
+  @@map("cafes")
+}
+
+model MenuItem {
+  id          String   @id @default(cuid())
+  cafeId      String
+  cafe        Cafe     @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  name        String
+  category    String?
+  description String?
+  /// Price in minor units of the café's currency (e.g. MMK as integer kyats).
+  /// Keeping money as Int avoids floating-point surprises.
+  priceMinor  Int?
+  currency    String   @default("MMK")
+  isAvailable Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([cafeId])
+  @@map("menu_items")
+}
+
+/// Open hours for one weekday. dayOfWeek: 0 = Sunday … 6 = Saturday (JS Date convention).
+/// Times are local wall-clock strings "HH:mm" in the café's timezone field.
+model CafeHours {
+  id        String  @id @default(cuid())
+  cafeId    String
+  cafe      Cafe    @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  dayOfWeek Int
+  openTime  String?
+  closeTime String?
+  isClosed  Boolean @default(false)
+
+  @@unique([cafeId, dayOfWeek])
+  @@map("cafe_hours")
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  cafes     CafeTag[]
+
+  @@map("tags")
+}
+
+model CafeTag {
+  cafeId String
+  tagId  String
+  cafe   Cafe   @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([cafeId, tagId])
+  @@map("cafe_tags")
+}
+
+// ---------------------------------------------------------------------------
+// Domain — social / personal features
+// ---------------------------------------------------------------------------
+
+model Review {
+  id         String   @id @default(cuid())
+  cafeId     String
+  userId     String
+  cafe       Cafe     @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 1–5 star rating
+  rating     Int
+  body       String?
+  /// Soft moderation flag for admin later (full CMS out of scope for scaffold)
+  isHidden   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  visitLogs  VisitLog[]
+
+  /// V1 rule: one active review per user per café (upsert in services later)
+  @@unique([cafeId, userId])
+  @@index([cafeId])
+  @@index([userId])
+  @@map("reviews")
+}
+
+/// Named list of cafés — the product “coffee journey” idea.
+model Collection {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isPublic    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  cafes       CollectionCafe[]
+
+  @@index([userId])
+  @@map("collections")
+}
+
+model CollectionCafe {
+  collectionId String
+  cafeId       String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  cafe         Cafe       @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  note         String?
+  addedAt      DateTime   @default(now())
+  sortOrder    Int        @default(0)
+
+  @@id([collectionId, cafeId])
+  @@map("collection_cafes")
+}
+
+/// Personal visit history (separate from public Review).
+model VisitLog {
+  id              String   @id @default(cuid())
+  userId          String
+  cafeId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cafe            Cafe     @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  visitedAt       DateTime @default(now())
+  tastingNotes    String?
+  /// Stub URL / media id until CDN pipeline exists
+  latteArtUrl     String?
+  reviewId        String?
+  review          Review?  @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([cafeId])
+  @@map("visit_logs")
+}
