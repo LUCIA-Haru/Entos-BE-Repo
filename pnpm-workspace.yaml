@@ -1,0 +1,6 @@
+# pnpm workspaces: every folder listed here is a package (or app).
+# apps/*   → runnable processes (our Express API)
+# packages/* → libraries other packages import
+packages:
+  - "apps/*"
+  - "packages/*"

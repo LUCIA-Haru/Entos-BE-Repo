@@ -1,0 +1,35 @@
+# Local PostgreSQL for Entos development.
+#
+# Why Docker Compose?
+# Cloud databases can be awkward from Myanmar networks (latency, blocked ports,
+# signup friction). A local Postgres container is the most reliable learning setup.
+#
+# Prerequisites: Docker Desktop (or Docker Engine + Compose plugin).
+#
+# Start:  docker compose up -d
+# Stop:   docker compose down
+# Reset:  docker compose down -v   (deletes all local DB data)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: entos-postgres
+    restart: unless-stopped
+    ports:
+      # Host 5432 → container 5432. Change left side if 5432 is already taken.
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: entos
+      POSTGRES_PASSWORD: entos_dev_password
+      POSTGRES_DB: entos
+    volumes:
+      - entos_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U entos -d entos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  entos_pg_data:
+    driver: local
